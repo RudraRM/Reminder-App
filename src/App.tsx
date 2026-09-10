@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Sun, Sunrise, Moon, CalendarDays, CircleCheck, Plus, Mic, ArrowRight, ChevronLeft, ChevronRight, Check, X, Settings, Bell, Volume2, Pill, Phone, Footprints, Droplets, BookOpen, Clock3, Repeat2, SlidersHorizontal, Heart, Download, SquarePen, Trash2, Leaf, Sparkles } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import Landing from './pages/Landing';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
 
+type AppScreen = 'landing' | 'login' | 'dashboard' | 'reminders';
 type Period = 'Morning' | 'Afternoon' | 'Evening';
 type Reminder = { id: string; title: string; time: string; period: Period; category: string; note: string; done: boolean; date: string; repeat: boolean; completedDates?: string[] };
 // Each daily routine keeps completion per day, without duplicating the reminder.
@@ -29,6 +34,39 @@ function SunshineArt() {
 }
 
 export default function App() {
+  const [appScreen, setAppScreen] = useState<AppScreen>(() => {
+    try {
+      const stored = localStorage.getItem('daylight-user-email');
+      return stored ? 'dashboard' : 'landing';
+    } catch {
+      return 'landing';
+    }
+  });
+  const [userEmail, setUserEmail] = useState<string>(() => {
+    try {
+      return localStorage.getItem('daylight-user-email') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const handleLoginClick = () => setAppScreen('login');
+
+  const handleLoginSuccess = (email: string) => {
+    setUserEmail(email);
+    localStorage.setItem('daylight-user-email', email);
+    setAppScreen('dashboard');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('daylight-user-email');
+    setUserEmail('');
+    setAppScreen('landing');
+  };
+
+  const handleBackToHome = () => setAppScreen('landing');
+
+  // Reminder App State
   const [tasks, setTasks] = useState<Reminder[]>(() => { try { const stored = localStorage.getItem('daylight-reminders'); return stored ? JSON.parse(stored) : initialTasks; } catch { return initialTasks; } });
   const [screen, setScreen] = useState<Screen>('Today');
   const [selectedDate, setSelectedDate] = useState(today);
@@ -74,6 +112,19 @@ export default function App() {
   const saveReminder = (e: React.FormEvent) => { e.preventDefault(); if (!title.trim()) { setError('Please enter a reminder, or use Speak Reminder.'); return; } const hour = Number(time.split(':')[0]); const period: Period = hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening'; const updated: Reminder = { id: editing || crypto.randomUUID(), title: title.trim(), time, date: reminderDate, category, note, repeat, period, done: editing ? tasks.find(t => t.id === editing)?.done || false : false, completedDates: editing ? tasks.find(t => t.id === editing)?.completedDates : [] }; setTasks(prev => editing ? prev.map(t => t.id === editing ? updated : t) : [...prev, updated]); setSelectedDate(reminderDate); setScreen('Today'); setFilter('All tasks'); closeDialog(); notify(editing ? 'Your reminder has been updated.' : 'Your reminder is saved. One less thing to keep in mind.'); };
   const moveDay = (direction: number) => { const date = new Date(`${selectedDate}T12:00:00`); date.setDate(date.getDate() + direction); setSelectedDate(dateKey(date)); };
   const downloadSwift = async () => { try { const files = ['DaylightApp.swift', 'ReminderModel.swift', 'ReminderViewModel.swift', 'SpeechService.swift', 'ReminderViews.swift']; const text = await Promise.all(files.map(async file => { const response = await fetch(`/swift/${file}`); if (!response.ok) throw new Error(); return `// ===== ${file} =====\n${await response.text()}`; })); const blob = new Blob([text.join('\n\n')], { type: 'text/plain' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'Daylight.swift'; a.click(); URL.revokeObjectURL(url); notify('SwiftUI source downloaded. Setup instructions are at the top.'); } catch { notify('The download couldn’t start. Please try again.'); } };
+
+  // Render based on current screen
+  if (appScreen === 'landing') {
+    return <Landing onLoginClick={handleLoginClick} />;
+  }
+
+  if (appScreen === 'login') {
+    return <Login onBack={handleBackToHome} onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  if (appScreen === 'dashboard') {
+    return <Dashboard userEmail={userEmail} onLogout={handleLogout} />;
+  }
 
   return <div className={`app ${largeText ? 'large-text' : ''} ${reduceMotion ? 'reduce-motion' : ''}`}>
     <a href="#main" className="skip-link">Skip to reminders</a>
